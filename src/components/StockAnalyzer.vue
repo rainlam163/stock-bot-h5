@@ -8,7 +8,7 @@ const results = ref([]);
 const loading = ref(false);
 const error = ref('');
 
-const API_URL = '/api/analyze';
+const API_URL = 'https://api.rainlam.top/api/analyze';
 
 const startAnalysis = async () => {
   // Reset state
