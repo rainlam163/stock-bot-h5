@@ -7,12 +7,14 @@ const stockInput = ref('');
 const results = ref([]);
 const loading = ref(false);
 const error = ref('');
+const finalReport = ref('');
 
 const API_URL = '/api/analyze';
 
 const startAnalysis = async () => {
   // Reset state
   results.value = [];
+  finalReport.value = '';
   error.value = '';
   loading.value = true;
 
@@ -48,6 +50,7 @@ const startAnalysis = async () => {
     }
 
     results.value = data.results || [];
+    finalReport.value = data.finalReport || '';
   } catch (err) {
     error.value = err.message || '发生未知错误';
   } finally {
@@ -87,6 +90,8 @@ const renderMarkdown = (text) => {
 
     <!-- Results List -->
     <div v-if="results.length > 0" class="results-container">
+      <!-- 提示 -->
+      <div v-html="renderMarkdown(finalReport)"></div>
       <div v-for="item in results" :key="item.code" class="result-card">
         <div class="card-header">
           <span class="stock-name">{{ item.name }}</span>
