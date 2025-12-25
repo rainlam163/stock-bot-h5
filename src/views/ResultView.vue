@@ -18,7 +18,7 @@ const goBack = () => {
   router.push('/');
 };
 
-const analyzeCodes = async (codes) => {
+const analyzeStock = async (code, holdingInfo) => {
   // Reset state
   results.value = [];
   finalReport.value = '';
@@ -31,7 +31,10 @@ const analyzeCodes = async (codes) => {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ codes }),
+      body: JSON.stringify({ 
+        code, 
+        holdingInfo 
+      }),
     });
 
     if (!response.ok) {
@@ -58,32 +61,32 @@ const renderMarkdown = (text) => {
 };
 
 onMounted(() => {
-  const codesParam = route.query.codes;
-  if (!codesParam) {
+  const code = route.query.code;
+  const status = route.query.status || 'empty';
+  
+  if (!code) {
     router.replace('/');
     return;
   }
 
-  const codes = codesParam.split(',').filter(c => c);
-  if (codes.length > 0) {
-    analyzeCodes(codes);
+  let holdingInfo = null;
+  if (status === 'holding') {
+    holdingInfo = {
+      status: 'holding',
+      cost: Number(route.query.cost),
+      quantity: Number(route.query.qty),
+      profit: Number(route.query.profit) || 0
+    };
   } else {
-    router.replace('/');
+    holdingInfo = { status: 'empty' };
   }
+
+  analyzeStock(code, holdingInfo);
 });
 </script>
 
 <template>
   <div class="result-container">
-    <div class="header-nav">
-      <button @click="goBack" class="back-link">
-        <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24" fill="currentColor">
-          <path d="M400-80 0-480l400-400 71 71-329 329 329 329-71 71Z"/>
-        </svg>
-      </button>
-      <h2 class="page-title">分析结果</h2>
-    </div>
-
     <!-- Loading Component -->
     <div v-if="loading" class="loading-wrapper">
       <Loading />
@@ -130,53 +133,11 @@ onMounted(() => {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
-.header-nav {
-  display: flex;
-  align-items: center;
-  margin-bottom: 30px;
-  position: relative;
-}
-
-.back-link {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  background: none;
-  border: none;
-  color: #666;
-  font-size: 1rem;
-  cursor: pointer;
-  padding: 8px 12px;
-  border-radius: 8px;
-  transition: background-color 0.2s;
-}
-
-.back-link:hover {
-  background-color: #f0f0f0;
-  color: #333;
-}
-
-@media (prefers-color-scheme: dark) {
-  .back-link { color: #aaa; }
-  .back-link:hover { background-color: #333; color: #fff; }
-}
-
-.page-title {
-  flex: 1;
-  text-align: center;
-  margin: 0;
-  font-size: 1.5rem;
-  color: #333;
-  transform: translateX(-24px);
-}
-
-@media (prefers-color-scheme: dark) {
-  .page-title { color: #eee; }
-}
-
 .loading-wrapper {
-  text-align: center;
-  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 80vh;
 }
 
 .loading-text {
