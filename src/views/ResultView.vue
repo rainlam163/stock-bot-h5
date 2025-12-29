@@ -1,8 +1,7 @@
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { marked } from 'marked';
-import Loading from '../components/Loading.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -11,11 +10,77 @@ const results = ref([]);
 const loading = ref(false);
 const error = ref('');
 const finalReport = ref('');
+const isAutoScrollEnabled = ref(true);
 
 const API_URL = '/api/analyze';
 
 const goBack = () => {
   router.push('/');
+};
+
+const handleScroll = () => {
+  const scrollHeight = document.documentElement.scrollHeight;
+  const scrollTop = window.scrollY;
+  const clientHeight = document.documentElement.clientHeight;
+  
+  // 如果距离底部小于 100px，则开启自动滚动
+  isAutoScrollEnabled.value = (scrollHeight - scrollTop - clientHeight) < 100;
+};
+
+const scrollToBottom = () => {
+  if (!isAutoScrollEnabled.value) return;
+  
+  nextTick(() => {
+    window.scrollTo({
+      top: document.documentElement.scrollHeight,
+      behavior: 'smooth'
+    });
+  });
+};
+
+const handleStreamMessage = (msg) => {
+  loading.value = false; // Stop main loading on first message received
+  
+  switch (msg.type) {
+    case 'meta':
+      finalReport.value = msg.data.finalReport;
+      scrollToBottom();
+      break;
+    case 'start':
+      // Init a new result card if not exists
+      if (!results.value.find(r => r.code === msg.data.code)) {
+        results.value.push({
+          code: msg.data.code,
+          name: msg.data.name,
+          advice: '', // Start empty, will stream in
+          isStreaming: true
+        });
+      }
+      scrollToBottom();
+      break;
+    case 'chunk':
+      // Append text to the current stock
+      if (results.value.length > 0) {
+        results.value[0].advice += msg.data;
+        scrollToBottom();
+      }
+      break;
+    case 'error':
+      if (results.value.length > 0) {
+        results.value[0].error = msg.data;
+        results.value[0].isStreaming = false;
+      } else {
+        error.value = msg.data;
+      }
+      scrollToBottom();
+      break;
+    case 'done':
+      // Stream finished
+      if (results.value.length > 0) {
+        results.value[0].isStreaming = false;
+      }
+      break;
+  }
 };
 
 const analyzeStock = async (code, holdingInfo) => {
@@ -31,7 +96,7 @@ const analyzeStock = async (code, holdingInfo) => {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ 
+      body: JSON.stringify({
         code, 
         holdingInfo 
       }),
@@ -41,18 +106,37 @@ const analyzeStock = async (code, holdingInfo) => {
       throw new Error(`请求失败: ${response.statusText}`);
     }
 
-    const data = await response.json();
-    
-    if (data.error) {
-      throw new Error(data.error);
-    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
 
-    results.value = data.results || [];
-    finalReport.value = data.finalReport || '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      
+      // Keep the last incomplete line in buffer
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const msg = JSON.parse(line);
+          handleStreamMessage(msg);
+        } catch (e) {
+          console.warn("Stream parse error:", e, line);
+        }
+      }
+    }
   } catch (err) {
     error.value = err.message || '发生未知错误';
   } finally {
     loading.value = false;
+    if (results.value.length > 0) {
+      results.value[0].isStreaming = false;
+    }
   }
 };
 
@@ -61,6 +145,8 @@ const renderMarkdown = (text) => {
 };
 
 onMounted(() => {
+  window.addEventListener('scroll', handleScroll);
+  
   const code = route.query.code;
   const status = route.query.status || 'empty';
   
@@ -83,14 +169,34 @@ onMounted(() => {
 
   analyzeStock(code, holdingInfo);
 });
+
+onUnmounted(() => {
+  window.removeEventListener('scroll', handleScroll);
+});
 </script>
 
 <template>
   <div class="result-container">
-    <!-- Loading Component -->
-    <div v-if="loading" class="loading-wrapper">
-      <Loading />
-      <p class="loading-text">正在深入分析市场数据，请稍候...</p>
+    <!-- Header with Back Button -->
+    <header class="page-header">
+      <button @click="goBack" class="back-btn" aria-label="返回">
+        <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" class="back-icon">
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+      </button>
+      <div v-if="results.length > 0" class="header-title">
+        <span class="stock-name">{{ results[0].name }}</span>
+        <span class="stock-code">{{ results[0].code }}</span>
+      </div>
+    </header>
+
+    <!-- Blinking Cursor (Initial Connection State) -->
+    <div v-if="loading && !finalReport && results.length === 0" class="waiting-container">
+      <div class="waiting-skeleton">
+        <div class="waiting-cursor"></div>
+        <p class="waiting-text">正在建立量化数据连接...</p>
+      </div>
+      <p class="generating-indicator">正在抓取实时行情、技术指标与市场舆情...</p>
     </div>
 
     <!-- Error Message -->
@@ -99,222 +205,285 @@ onMounted(() => {
       <button @click="goBack" class="retry-btn">返回重试</button>
     </div>
 
-    <!-- Results List -->
-    <div v-if="!loading && (results.length > 0 || finalReport)" class="results-content">
+    <!-- Results Feed -->
+    <main v-if="finalReport || results.length > 0" class="results-feed">
       
-      <!-- Final Report -->
-      <div v-if="finalReport" class="report-card">
-        <div class="report-header">
-           <h3>综合分析报告</h3>
-        </div>
+      <!-- Metadata / Final Report Header -->
+      <section v-if="finalReport" class="report-section">
+        <div class="section-label">基础信息与环境</div>
         <div class="report-body" v-html="renderMarkdown(finalReport)"></div>
-      </div>
+      </section>
 
-      <!-- Individual Stock Cards -->
-      <div v-for="item in results" :key="item.code" class="result-card">
-        <div class="card-header">
-          <span class="stock-name">{{ item.name }}</span>
-          <span class="stock-code">({{ item.code }})</span>
-        </div>
-        <div class="card-body">
+      <!-- Analysis Content -->
+      <section v-for="item in results" :key="item.code" class="analysis-section">
+        <div class="section-label">AI 深度分析与策略</div>
+        <div class="analysis-body">
           <div v-if="item.error" class="item-error">{{ item.error }}</div>
-          <div v-else class="advice-content" v-html="renderMarkdown(item.advice)"></div>
+          <div v-else class="advice-wrapper">
+             <div class="advice-content" v-html="renderMarkdown(item.advice)"></div>
+             <span v-if="item.isStreaming" class="streaming-cursor"></span>
+             <div v-if="!item.advice && item.isStreaming" class="generating-indicator">
+                AI 正在处理量化因子并撰写报告...
+             </div>
+          </div>
         </div>
-      </div>
-    </div>
+      </section>
+    </main>
   </div>
 </template>
 
 <style scoped>
 .result-container {
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 20px;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  background-color: #fff;
+  min-height: 100vh;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
-.loading-wrapper {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-height: 80vh;
+@media (prefers-color-scheme: dark) {
+  .result-container {
+    background-color: #121212;
+    color: #e0e0e0;
+  }
 }
 
-.loading-text {
-  margin-top: 20px;
+.page-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid #eee;
+  gap: 16px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .page-header {
+    background: rgba(18, 18, 18, 0.9);
+    border-bottom-color: #333;
+  }
+}
+
+.back-btn {
+  background: none;
+  border: none;
+  color: #333;
+  padding: 8px;
+  margin-left: -8px; /* Offset padding to align with edge */
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s, background-color 0.2s;
+  border-radius: 50%;
+}
+
+.back-btn:active {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+@media (prefers-color-scheme: dark) {
+  .back-btn {
+    color: #e0e0e0;
+  }
+  .back-btn:active {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+}
+
+.back-icon {
+  display: block;
+}
+
+.header-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.stock-name {
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.stock-code {
+  font-size: 0.85rem;
   color: #666;
+}
+
+.waiting-container {
+  display: flex;
+  flex-direction: column;
+  padding: 40px 20px;
+  gap: 12px;
+}
+
+.waiting-skeleton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.waiting-cursor {
+  width: 2px;
+  height: 1.2em;
+  background-color: #d32f2f;
+  animation: blink 1s step-end infinite;
+}
+
+.waiting-text {
+  color: #666;
+  font-size: 0.95rem;
+}
+
+@keyframes blink {
+  from, to { opacity: 1; }
+  50% { opacity: 0; }
 }
 
 .error-msg {
   text-align: center;
   color: #ff4444;
-  padding: 20px;
-  background-color: #ffe6e6;
-  border-radius: 12px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
+  padding: 40px 20px;
 }
 
 .retry-btn {
-  background-color: #ff4444;
+  background-color: #d32f2f;
   color: white;
   border: none;
-  padding: 8px 16px;
-  border-radius: 6px;
+  padding: 10px 20px;
+  border-radius: 8px;
+  margin-top: 16px;
   cursor: pointer;
 }
 
-.report-card, .result-card {
-  background: #fff;
-  border-radius: 16px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-  margin-bottom: 24px;
-  overflow: hidden;
-  border: 1px solid #eee;
+.results-feed {
+  padding: 0;
 }
 
-@media (prefers-color-scheme: dark) {
-  .report-card, .result-card {
-    background: #1e1e1e;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    border: 1px solid #333;
-  }
-}
-
-.report-header {
-  background: linear-gradient(90deg, #d32f2f 0%, #b71c1c 100%);
-  color: white;
-  padding: 15px 20px;
-}
-
-.report-header h3 {
-  margin: 0;
-  font-size: 1.2rem;
-}
-
-.report-body {
-  padding: 20px;
-  font-size: 15px;
-  line-height: 1.6;
-  color: #2c3e50;
-}
-
-.card-header {
-  background-color: #f8f9fa;
-  padding: 15px 20px;
-  border-bottom: 1px solid #eee;
+.section-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  color: #999;
+  letter-spacing: 0.5px;
+  font-weight: 700;
+  padding: 16px 16px 4px;
   display: flex;
-  align-items: baseline;
-  gap: 10px;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-label::before {
+  content: "";
+  display: block;
+  width: 3px;
+  height: 12px;
+  background-color: #d32f2f;
+  border-radius: 2px;
 }
 
 @media (prefers-color-scheme: dark) {
-  .card-header {
-    background-color: #2a2a2a;
-    border-bottom: 1px solid #444;
+  .section-label {
+    color: #666;
   }
 }
 
-.stock-name {
-  font-size: 1.2em;
-  font-weight: bold;
-  color: #2c3e50;
+.report-section, .analysis-section {
+  border-bottom: 1px solid #eee;
 }
 
 @media (prefers-color-scheme: dark) {
-  .stock-name { color: #e0e0e0; }
+  .report-section, .analysis-section {
+    border-bottom: 1px solid #222;
+  }
 }
 
-.stock-code {
-  color: #666;
-  font-size: 0.9em;
+.report-body, .analysis-body {
+  padding: 0 16px;
+  font-size: 15px;
+  line-height: 1.7;
 }
 
-.card-body {
-  padding: 20px;
+.advice-wrapper {
+  position: relative;
 }
 
-.advice-content, .report-body {
-  /* Common Markdown Styles */
-  font-family: inherit;
-}
-
-.advice-content :deep(h1), .advice-content :deep(h2),
-.report-body :deep(h1), .report-body :deep(h2) {
-  font-size: 1.3em;
-  margin-top: 1em;
-  margin-bottom: 0.5em;
-  color: #2c3e50;
-  border-bottom: 2px solid #f0f0f0;
-  padding-bottom: 5px;
-}
-
-.advice-content :deep(h3), .advice-content :deep(h4),
-.report-body :deep(h3), .report-body :deep(h4) {
-  font-size: 1.1em;
-  margin-top: 1em;
-  margin-bottom: 0.5em;
-  color: #34495e;
-  font-weight: 600;
-}
-
-.advice-content :deep(p), .report-body :deep(p) {
-  margin-bottom: 1em;
-}
-
-.advice-content :deep(ul), .report-body :deep(ul),
-.advice-content :deep(ol), .report-body :deep(ol) {
-  padding-left: 20px;
-  margin-bottom: 1em;
-}
-
-.advice-content :deep(li), .report-body :deep(li) {
-  margin-bottom: 0.5em;
-}
-
-.advice-content :deep(strong), .report-body :deep(strong) {
+.advice-content :deep(h4) {
+  margin: 1em 0 0.5em;
+  font-size: 1.05rem;
   color: #d32f2f;
   font-weight: 700;
 }
 
-.advice-content :deep(blockquote), .report-body :deep(blockquote) {
-  border-left: 4px solid #d32f2f;
-  margin: 1em 0;
-  padding-left: 1em;
-  color: #555;
-  background-color: #f9f9f9;
-  padding: 10px;
-  border-radius: 0 4px 4px 0;
+@media (prefers-color-scheme: dark) {
+  .advice-content :deep(h4) {
+    color: #ff8a80;
+  }
+}
+
+.advice-content :deep(p) {
+  margin-bottom: 1em;
+}
+
+.advice-content :deep(ul), .advice-content :deep(ol) {
+  padding-left: 20px;
+  margin-bottom: 1.2em;
+}
+
+.advice-content :deep(li) {
+  margin-bottom: 0.6em;
+}
+
+.advice-content :deep(strong) {
+  font-weight: 700;
+  color: #000;
 }
 
 @media (prefers-color-scheme: dark) {
-  .report-body, .advice-content { color: #d0d0d0; }
-  
-  .advice-content :deep(h1), .advice-content :deep(h2),
-  .report-body :deep(h1), .report-body :deep(h2) {
-    color: #e0e0e0;
-    border-bottom-color: #444;
-  }
-
-  .advice-content :deep(h3), .advice-content :deep(h4),
-  .report-body :deep(h3), .report-body :deep(h4) {
-    color: #ccc;
-  }
-  
-  .advice-content :deep(strong), .report-body :deep(strong) {
-    color: #ff8a80;
-  }
-
-  .advice-content :deep(blockquote), .report-body :deep(blockquote) {
-    background-color: #2a2a2a;
-    color: #aaa;
-    border-left-color: #b71c1c;
+  .advice-content :deep(strong) {
+    color: #fff;
   }
 }
 
+.advice-content :deep(blockquote) {
+  border-left: 4px solid #d32f2f;
+  margin: 1.2em 0;
+  padding: 12px 16px;
+  background-color: #fef2f2;
+  border-radius: 0 8px 8px 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  .advice-content :deep(blockquote) {
+    background-color: #2a1a1a;
+    color: #ccc;
+  }
+}
+
+.streaming-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1.1em;
+  background-color: #d32f2f;
+  margin-left: 4px;
+  vertical-align: middle;
+  animation: blink 1s step-end infinite;
+}
+
+.generating-indicator {
+  color: #999;
+  font-size: 0.85rem;
+  font-style: italic;
+  margin-top: 12px;
+}
+
 .item-error {
-  color: #ff6b6b;
+  color: #ff4444;
+  padding: 16px;
 }
 </style>
