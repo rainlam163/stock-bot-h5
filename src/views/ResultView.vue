@@ -15,7 +15,7 @@ const isAutoScrollEnabled = ref(true);
 const API_URL = '/api/analyze';
 
 const goBack = () => {
-  router.push('/');
+  router.back();
 };
 
 const handleScroll = () => {
