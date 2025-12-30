@@ -1,8 +1,11 @@
 <script setup>
-import { ref, watch, computed } from 'vue';
-import { useRouter } from 'vue-router';
+import { ref, watch, computed, onMounted } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 
 const router = useRouter();
+const route = useRoute();
+
+const currentMode = ref('diagnose'); // 'diagnose' | 'select'
 const stockInput = ref('');
 const holdingStatus = ref('empty'); // 'empty' or 'holding'
 const costPrice = ref('');
@@ -18,6 +21,11 @@ watch([stockInput, costPrice, quantity], () => {
 const isHolding = computed(() => holdingStatus.value === 'holding');
 
 const handleStart = () => {
+  if (currentMode.value === 'select') {
+    router.push('/recommend');
+    return;
+  }
+
   const code = stockInput.value.trim();
 
   if (!code) {
@@ -52,77 +60,115 @@ const handleKeydown = (e) => {
     handleStart();
   }
 };
+
+onMounted(() => {
+  if (route.query.code) {
+    stockInput.value = route.query.code;
+    currentMode.value = 'diagnose';
+  }
+});
 </script>
 
 <template>
   <div class="home-container">
+    <!-- Mode Switcher -->
+    <div class="mode-switcher">
+      <button 
+        class="mode-btn" 
+        :class="{ active: currentMode === 'diagnose' }"
+        @click="currentMode = 'diagnose'"
+      >
+        智能诊股
+      </button>
+      <button 
+        class="mode-btn" 
+        :class="{ active: currentMode === 'select' }"
+        @click="currentMode = 'select'"
+      >
+        智能选股
+      </button>
+    </div>
+
     <div class="content-wrapper">
       <div class="greeting-container">
         <h2 class="greeting-sub">
           <span class="highlight">A股热心股民,</span> 你好,
         </h2>
         <h1 class="greeting-main">
-          让我来帮你深度诊断你的股票!
+          {{ currentMode === 'diagnose' ? '让我来帮你深度诊断你的股票!' : '我可以帮你选出 Top15 潜力股!' }}
         </h1>
       </div>
 
       <div class="input-area">
         <div class="input-card">
-          <!-- Stock Code Input -->
-          <div class="form-group">
-            <label>股票代码</label>
-            <input 
-              v-model="stockInput" 
-              @keydown.enter="handleStart"
-              placeholder="例如: 600519"
-              class="gemini-input"
-              type="text"
-            />
-          </div>
-
-          <!-- Holding Status Toggle -->
-          <div class="form-group">
-            <label>持仓状态</label>
-            <div class="toggle-group">
-              <label class="toggle-btn" :class="{ active: holdingStatus === 'empty' }">
-                <input type="radio" value="empty" v-model="holdingStatus" />
-                空仓观望
-              </label>
-              <label class="toggle-btn" :class="{ active: holdingStatus === 'holding' }">
-                <input type="radio" value="holding" v-model="holdingStatus" />
-                持有该股
-              </label>
+          
+          <!-- Diagnosis Mode Form -->
+          <div v-if="currentMode === 'diagnose'">
+            <!-- Stock Code Input -->
+            <div class="form-group">
+              <label>股票代码</label>
+              <input 
+                v-model="stockInput" 
+                @keydown.enter="handleStart"
+                placeholder="例如: 600519"
+                class="gemini-input"
+                type="text"
+              />
             </div>
-          </div>
 
-          <!-- Holding Details (Conditional) -->
-          <transition name="slide-fade">
-            <div v-if="isHolding" class="holding-details">
-              <div class="detail-row">
-                <div class="form-group half">
-                  <label>持仓成本 (元)</label>
-                  <input type="number" v-model="costPrice" placeholder="0.00" class="gemini-input-sm" />
-                </div>
-                <div class="form-group half">
-                  <label>持仓数量 (股)</label>
-                  <input type="number" v-model="quantity" placeholder="0" class="gemini-input-sm" />
-                </div>
-              </div>
-              <div class="form-group">
-                <label>当前盈亏 (元) <span class="optional">(可选)</span></label>
-                <input type="number" v-model="profit" placeholder="+2000 或 -500" class="gemini-input-sm" />
+            <!-- Holding Status Toggle -->
+            <div class="form-group">
+              <label>持仓状态</label>
+              <div class="toggle-group">
+                <label class="toggle-btn" :class="{ active: holdingStatus === 'empty' }">
+                  <input type="radio" value="empty" v-model="holdingStatus" />
+                  空仓观望
+                </label>
+                <label class="toggle-btn" :class="{ active: holdingStatus === 'holding' }">
+                  <input type="radio" value="holding" v-model="holdingStatus" />
+                  持有该股
+                </label>
               </div>
             </div>
-          </transition>
 
+            <!-- Holding Details (Conditional) -->
+            <transition name="slide-fade">
+              <div v-if="isHolding" class="holding-details">
+                <div class="detail-row">
+                  <div class="form-group half">
+                    <label>持仓成本 (元)</label>
+                    <input type="number" v-model="costPrice" placeholder="0.00" class="gemini-input-sm" />
+                  </div>
+                  <div class="form-group half">
+                    <label>持仓数量 (股)</label>
+                    <input type="number" v-model="quantity" placeholder="0" class="gemini-input-sm" />
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label>当前盈亏 (元) <span class="optional">(可选)</span></label>
+                  <input type="number" v-model="profit" placeholder="+2000 或 -500" class="gemini-input-sm" />
+                </div>
+              </div>
+            </transition>
+          </div>
+          
+          <!-- Selection Mode Placeholder -->
+          <div v-else class="selection-placeholder">
+             <p class="selection-desc">基于大数据与量化模型，实时筛选 A 股主板最具投资价值的优质标的。</p>
+          </div>
+
+          <!-- Main Action Button -->
           <button @click="handleStart" class="gemini-btn">
-            <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24" fill="currentColor">
+            <svg v-if="currentMode === 'diagnose'" xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24" fill="currentColor">
               <path d="M120-160v-640l760 320-760 320Zm80-120 474-200-474-200v140l240 60-240 60v140Zm0 0v-400 400Z"/>
             </svg>
-            <span class="btn-text">开始智能诊股</span>
+            <svg v-else xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24" fill="currentColor">
+               <path d="M440-440H200v-80h240v-240h80v240h240v80H520v240h-80v-240Z"/>
+            </svg>
+            <span class="btn-text">{{ currentMode === 'diagnose' ? '开始智能诊股' : '开始智能选股' }}</span>
           </button>
         </div>
-        <div v-if="error" class="error-msg">{{ error }}</div>
+        <div v-if="error && currentMode === 'diagnose'" class="error-msg">{{ error }}</div>
       </div>
     </div>
   </div>
@@ -136,8 +182,46 @@ const handleKeydown = (e) => {
   align-items: center;
   min-height: 80vh;
   padding: 20px;
-  padding-top: 120px;
+  padding-top: 80px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.mode-switcher {
+  display: flex;
+  background-color: rgba(0,0,0,0.05);
+  border-radius: 20px;
+  padding: 4px;
+  margin-bottom: 30px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .mode-switcher { background-color: rgba(255,255,255,0.1); }
+}
+
+.mode-btn {
+  border: none;
+  background: none;
+  padding: 8px 20px;
+  border-radius: 16px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.mode-btn.active {
+  background-color: #fff;
+  color: #d32f2f;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+@media (prefers-color-scheme: dark) {
+  .mode-btn { color: #aaa; }
+  .mode-btn.active {
+    background-color: #333;
+    color: #ff5252;
+  }
 }
 
 .content-wrapper {
@@ -331,6 +415,21 @@ const handleKeydown = (e) => {
   color: #ff4444;
   font-size: 0.9rem;
   text-align: center;
+}
+
+.selection-placeholder {
+  padding: 20px 10px 30px;
+}
+
+.selection-desc {
+  color: #666;
+  line-height: 1.6;
+  font-size: 1.05rem;
+  margin: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  .selection-desc { color: #aaa; }
 }
 
 /* Animations */
