@@ -83,7 +83,7 @@ const handleStreamMessage = (msg) => {
   }
 };
 
-const analyzeStock = async (code, holdingInfo) => {
+const analyzeStock = async (code, holdingInfo, isDeep) => {
   // Reset state
   results.value = [];
   finalReport.value = '';
@@ -98,7 +98,8 @@ const analyzeStock = async (code, holdingInfo) => {
       },
       body: JSON.stringify({
         code, 
-        holdingInfo 
+        holdingInfo,
+        isDeep
       }),
     });
 
@@ -149,6 +150,7 @@ onMounted(() => {
   
   const code = route.query.code;
   const status = route.query.status || 'empty';
+  const isDeep = route.query.isDeep === '1';
   
   if (!code) {
     router.replace('/');
@@ -167,7 +169,7 @@ onMounted(() => {
     holdingInfo = { status: 'empty' };
   }
 
-  analyzeStock(code, holdingInfo);
+  analyzeStock(code, holdingInfo, isDeep);
 });
 
 onUnmounted(() => {

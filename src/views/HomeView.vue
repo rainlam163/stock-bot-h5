@@ -8,6 +8,7 @@ const route = useRoute();
 const currentMode = ref('diagnose'); // 'diagnose' | 'select'
 const stockInput = ref('');
 const holdingStatus = ref('empty'); // 'empty' or 'holding'
+const isDeepThinking = ref(false);
 const costPrice = ref('');
 const quantity = ref('');
 const profit = ref('');
@@ -35,7 +36,8 @@ const handleStart = () => {
 
   const queryParams = { 
     code,
-    status: holdingStatus.value 
+    status: holdingStatus.value,
+    isDeep: isDeepThinking.value ? '1' : '0'
   };
 
   if (isHolding.value) {
@@ -128,6 +130,17 @@ onMounted(() => {
                   <input type="radio" value="holding" v-model="holdingStatus" />
                   持有该股
                 </label>
+              </div>
+            </div>
+
+            <!-- Deep Thinking Option -->
+            <div class="form-group">
+              <div class="checkbox-group">
+                <label class="checkbox-label">
+                  <input type="checkbox" v-model="isDeepThinking" />
+                  开启深度思考
+                </label>
+                <span v-if="isDeepThinking" class="deep-hint">开启后将使用更强大的模型进行推演，耗时较长</span>
               </div>
             </div>
 
@@ -384,6 +397,39 @@ onMounted(() => {
   font-weight: normal;
   color: #999;
   font-size: 0.8rem;
+}
+
+.checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.95rem;
+  color: #555;
+  cursor: pointer;
+}
+
+.checkbox-label input {
+  width: 18px;
+  height: 18px;
+  accent-color: #d32f2f;
+}
+
+.deep-hint {
+  font-size: 0.8rem;
+  color: #999;
+  margin-left: 26px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .checkbox-label { color: #ccc; }
+  .deep-hint { color: #666; }
 }
 
 .gemini-btn {
