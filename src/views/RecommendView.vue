@@ -10,36 +10,43 @@ const error = ref('');
 const API_URL = '/api/recommend';
 
 const fetchRecommendations = async () => {
-  // Check cache first
-  const CACHE_KEY = 'recommend_stocks';
-  const CACHE_TIME_KEY = 'recommend_time';
-  const cachedData = sessionStorage.getItem(CACHE_KEY);
-  const cachedTime = sessionStorage.getItem(CACHE_TIME_KEY);
-  
-  // Cache valid for 5 minutes
-  if (cachedData && cachedTime && (Date.now() - Number(cachedTime) < 5 * 60 * 1000)) {
-    stocks.value = JSON.parse(cachedData);
-    loading.value = false;
-    return;
-  }
-
   loading.value = true;
   try {
     const response = await fetch(API_URL);
-    if (!response.ok) {
-      throw new Error('获取推荐列表失败');
-    }
-    const data = await response.json();
-    // Sort by score descending
-    stocks.value = data.sort((a, b) => b.score - a.score);
+    if (!response.ok) throw new Error('获取推荐列表失败');
     
-    // Save to cache
-    sessionStorage.setItem(CACHE_KEY, JSON.stringify(stocks.value));
-    sessionStorage.setItem(CACHE_TIME_KEY, String(Date.now()));
+    let data = await response.json();
+    
+    // 如果数据为空，可能是后台还没跑任务
+    if (!data || data.length === 0) {
+       error.value = '暂无最新选股数据，请点击重试以触发更新';
+       stocks.value = [];
+       return;
+    }
+
+    stocks.value = data; // 数据库取出的通常已经是排好序的
+
   } catch (err) {
     error.value = err.message || '网络请求错误';
   } finally {
     loading.value = false;
+  }
+};
+
+const triggerUpdate = async () => {
+  loading.value = true;
+  error.value = '';
+  try {
+     // 调用触发接口 (需要等待较长时间)
+     const res = await fetch('/api/trigger-selection', { method: 'POST' });
+     if (!res.ok) throw new Error('触发更新失败');
+     
+     // 触发成功后，重新获取列表
+     await fetchRecommendations();
+  } catch (err) {
+     error.value = '更新超时或失败，请稍后重试';
+  } finally {
+     loading.value = false;
   }
 };
 
@@ -76,7 +83,7 @@ onMounted(() => {
         </svg>
       </button>
       <div class="header-title">
-        <span class="title-text">智能选股榜单 (Top 15)</span>
+        <span class="title-text">智能选股榜单 (Top 20)</span>
       </div>
     </header>
 
@@ -88,7 +95,7 @@ onMounted(() => {
 
       <div v-else-if="error" class="error-state">
         <p>{{ error }}</p>
-        <button @click="fetchRecommendations" class="retry-btn">重试</button>
+        <button @click="triggerUpdate" class="retry-btn">立即更新数据</button>
       </div>
 
       <div v-else class="stock-list">

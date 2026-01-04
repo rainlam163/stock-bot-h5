@@ -3,7 +3,6 @@ import { ref, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { marked } from 'marked';
 
-const route = useRoute();
 const router = useRouter();
 const stock = ref(null);
 
@@ -55,7 +54,7 @@ onMounted(() => {
       <!-- Score Card -->
       <div class="score-card">
         <div class="score-circle">
-          <span class="score-val">{{ stock.score }}</span>
+          <span class="score-val">{{ Number(stock.score).toFixed(2) }}</span>
           <span class="score-label">AI 推荐分</span>
         </div>
         <div class="market-info">
@@ -65,7 +64,7 @@ onMounted(() => {
           </div>
           <div class="info-item">
             <span class="label">今日涨幅</span>
-            <span class="value red">+{{ stock.changePercent }}%</span>
+            <span class="value red">{{ `${stock.changePercent > 0 ? '+' : ''}${stock.changePercent}` }}%</span>
           </div>
         </div>
       </div>

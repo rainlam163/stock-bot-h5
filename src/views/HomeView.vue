@@ -95,7 +95,7 @@ onMounted(() => {
           <span class="highlight">A股热心股民,</span> 你好,
         </h2>
         <h1 class="greeting-main">
-          {{ currentMode === 'diagnose' ? '让我来帮你深度诊断你的股票!' : '我可以帮你选出 Top15 潜力股!' }}
+          {{ currentMode === 'diagnose' ? '让我来帮你深度诊断你的股票!' : '我可以帮你选出 Top20 潜力股!' }}
         </h1>
       </div>
 
