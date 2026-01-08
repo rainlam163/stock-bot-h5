@@ -3,6 +3,7 @@ import HomeView from '../views/HomeView.vue'
 import ResultView from '../views/ResultView.vue'
 import RecommendView from '../views/RecommendView.vue'
 import DetailView from '../views/DetailView.vue'
+import SectorView from '../views/SectorView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -26,6 +27,11 @@ const router = createRouter({
       path: '/detail',
       name: 'detail',
       component: DetailView
+    },
+    {
+      path: '/sector',
+      name: 'sector',
+      component: SectorView
     }
   ]
 })

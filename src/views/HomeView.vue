@@ -5,7 +5,7 @@ import { useRouter, useRoute } from 'vue-router';
 const router = useRouter();
 const route = useRoute();
 
-const currentMode = ref('diagnose'); // 'diagnose' | 'select'
+const currentMode = ref('diagnose'); // 'diagnose' | 'select' | 'sector'
 const stockInput = ref('');
 const holdingStatus = ref('empty'); // 'empty' or 'holding'
 const isDeepThinking = ref(false);
@@ -24,6 +24,11 @@ const isHolding = computed(() => holdingStatus.value === 'holding');
 const handleStart = () => {
   if (currentMode.value === 'select') {
     router.push('/recommend');
+    return;
+  }
+
+  if (currentMode.value === 'sector') {
+    router.push('/sector');
     return;
   }
 
@@ -89,6 +94,13 @@ onMounted(() => {
       >
         智能选股
       </button>
+      <button 
+        class="mode-btn" 
+        :class="{ active: currentMode === 'sector' }"
+        @click="currentMode = 'sector'"
+      >
+        行业预测
+      </button>
     </div>
 
     <div class="content-wrapper">
@@ -97,7 +109,9 @@ onMounted(() => {
           <span class="highlight">A股热心股民,</span> 你好,
         </h2>
         <h1 class="greeting-main">
-          {{ currentMode === 'diagnose' ? '让我来帮你深度诊断你的股票!' : '我可以帮你选出 Top20 潜力股!' }}
+          <template v-if="currentMode === 'diagnose'">让我来帮你深度诊断你的股票!</template>
+          <template v-else-if="currentMode === 'select'">我可以帮你选出 Top15 潜力股!</template>
+          <template v-else>我可以帮你预测接下来的领涨行业!</template>
         </h1>
       </div>
 
@@ -166,8 +180,13 @@ onMounted(() => {
           </div>
           
           <!-- Selection Mode Placeholder -->
+          <div v-else-if="currentMode === 'select'" class="selection-placeholder">
+             <p class="selection-desc">基于海量数据与量化模型，全市场地毯式筛选最具投资价值的优质标的。</p>
+          </div>
+
+          <!-- Sector Mode Placeholder -->
           <div v-else class="selection-placeholder">
-             <p class="selection-desc">基于大数据与量化模型，实时筛选 A 股主板最具投资价值的优质标的。</p>
+             <p class="selection-desc">结合全球市场表现、行业动能及最新政策快讯，智能预测高景气度行业板块。</p>
           </div>
 
           <!-- Main Action Button -->
@@ -178,7 +197,9 @@ onMounted(() => {
             <svg v-else xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24" fill="currentColor">
                <path d="M440-440H200v-80h240v-240h80v240h240v80H520v240h-80v-240Z"/>
             </svg>
-            <span class="btn-text">{{ currentMode === 'diagnose' ? '开始智能诊股' : '开始智能选股' }}</span>
+            <span class="btn-text">
+              {{ currentMode === 'diagnose' ? '开始智能诊股' : (currentMode === 'select' ? '开始智能选股' : '开始智能预测') }}
+            </span>
           </button>
         </div>
         <div v-if="error && currentMode === 'diagnose'" class="error-msg">{{ error }}</div>
