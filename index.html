@@ -1,13 +1,103 @@
 <!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>DeepStock-你的股票AI助理</title>
-  </head>
-  <body>
-    <div id="app"></div>
-    <script type="module" src="/src/main.js"></script>
-  </body>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>玄股通 - 玄学股票凶吉预测</title>
+  <link rel="stylesheet" href="/styles/main.css?v=3" />
+</head>
+<body>
+  <div id="app">
+    <!-- 背景粒子 -->
+    <canvas id="particles"></canvas>
+
+    <!-- 主界面 -->
+    <main class="main-wrapper">
+      <!-- 标题区 -->
+      <header class="header">
+        <div class="bagua-icon">☰</div>
+        <h1 class="title">玄股通</h1>
+        <p class="subtitle">以易理推演，洞察股市玄机</p>
+      </header>
+
+      <!-- 输入区 -->
+      <section class="input-section">
+        <div class="date-toggle">
+          <button class="toggle-btn active" data-offset="0" onclick="switchDate(this)">今日</button>
+          <button class="toggle-btn" data-offset="1" onclick="switchDate(this)">明日</button>
+        </div>
+        <div class="input-wrapper">
+          <input
+            type="text"
+            id="stockInput"
+            placeholder="输入股票名称，如：贵州茅台"
+            maxlength="20"
+            autocomplete="off"
+          />
+          <button id="divineBtn" onclick="startDivination()">
+            <span class="btn-text">起卦</span>
+            <span class="btn-icon">☯</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- 占卜动画区 -->
+      <section id="animationSection" class="animation-section hidden">
+        <div class="divination-circle">
+          <div class="trigram-ring">
+            <span class="trigram">乾</span>
+            <span class="trigram">兑</span>
+            <span class="trigram">离</span>
+            <span class="trigram">震</span>
+            <span class="trigram">巽</span>
+            <span class="trigram">坎</span>
+            <span class="trigram">艮</span>
+            <span class="trigram">坤</span>
+          </div>
+          <div class="inner-circle">
+            <span class="yin-yang">☯</span>
+          </div>
+        </div>
+        <p class="divination-text">天机推演中...</p>
+      </section>
+
+      <!-- 结果区 -->
+      <section id="resultSection" class="result-section hidden">
+        <div class="result-card">
+          <div class="stock-name" id="resultStockName"></div>
+          <div class="fortune-level" id="fortuneLevel"></div>
+          <div class="fortune-desc" id="fortuneDesc"></div>
+          <div class="divider"></div>
+          <div class="detail-grid">
+            <div class="detail-item">
+              <span class="detail-label">本卦</span>
+              <span class="detail-value" id="benGua"></span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">变卦</span>
+              <span class="detail-value" id="bianGua"></span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">五行</span>
+              <span class="detail-value" id="wuXing"></span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">方位</span>
+              <span class="detail-value" id="fangWei"></span>
+            </div>
+          </div>
+          <div class="advice-box" id="adviceBox"></div>
+        </div>
+        <button class="retry-btn" onclick="resetDivination()">再卜一卦</button>
+      </section>
+
+      <!-- 底部 -->
+      <footer class="footer">
+        <p>仅供娱乐，不构成投资建议</p>
+      </footer>
+    </main>
+  </div>
+
+  <script src="/scripts/app.js?v=3"></script>
+</body>
 </html>
